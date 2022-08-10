@@ -1,11 +1,12 @@
 # Leagie_Of_Legend_Prediction
-<br>
-<br>
-About Dataset<br>
-Context<br>
-League of Legends is a MOBA (multiplayer online battle arena) where 2 teams (blue and red) face off. There are 3 lanes, a jungle, and 5 roles. The goal is to take down the enemy Nexus to win the game.<br>
 
-Content
+## Context
+League of Legends is a MOBA (multiplayer online battle arena) where 2 teams (blue and red) face off. There are 3 lanes, a jungle, and 5 roles. The goal is to take down the enemy Nexus to win the game.
+
+## Context
+League of Legends is a MOBA (multiplayer online battle arena) where 2 teams (blue and red) face off. There are 3 lanes, a jungle, and 5 roles. The goal is to take down the enemy Nexus to win the game.
+
+## Content
 This dataset contains the first 10min. stats of approx. 10k ranked games (SOLO QUEUE) from a high ELO (DIAMOND I to MASTER). Players have roughly the same level.<br>
 
 Each game is unique. The gameId can help you to fetch more attributes from the Riot API.<br>
@@ -16,7 +17,7 @@ The column blueWins is the target value (the value we are trying to predict). A 
 
 So far I know, there is no missing value.<br>
 
-Glossary
+## Glossary
 Warding totem: An item that a player can put on the map to reveal the nearby area. Very useful for map/objectives control.<br>
 Minions: NPC that belong to both teams. They give gold when killed by players.<br>
 Jungle minions: NPC that belong to NO TEAM. They give gold and buffs when killed by players.<br>
