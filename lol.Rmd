@@ -1,0 +1,155 @@
+---
+title: ' League of Legend Preiction'
+output:
+  html_document:
+    df_print: paged
+---
+
+
+
+```{r}
+library(dplyr)
+library(caret)
+library(ggplot2)
+library(data.table)
+library(Metrics)
+
+```
+
+
+```{r}
+df_lol = read.csv('./high_diamond_ranked_10min.csv')
+df_lol$gameId = NULL
+head(df_lol)
+```
+
+
+取20個欄位藍隊資料作預測
+```{r}
+blue = df_lol[,1:20]
+```
+
+```{r}
+red = df_lol[,21:39]
+red_win = ifelse(blue$blueWins == 1,0,1)
+red$redwins = red_win
+
+red$redwins = NULL
+red$redGoldPerMin = NULL
+red$redCSPerMin = NULL
+
+blue$blueGoldPerMin = NULL
+blue$blueCSPerMin = NULL
+
+colnames(red)
+colnames(blue)
+
+# 有轉出combined.csv給xgboost使用相同的資料集
+combined = blue[,2:16] - red[,1:15]
+combined$blueWins = blue$blueWins
+combined$blueGoldDiff = blue$blueGoldDiff
+combined$blueExperienceDiff = blue$blueExperienceDiff
+combined$blueTotalExperience = NULL
+combined$blueTotalGold= NULL
+colnames(combined)
+```
+
+
+logistic regression
+```{r}
+set.seed(2020)
+index = createDataPartition(combined$blueWins, p = 0.8, list = FALSE)
+train = combined[index,]
+test = combined[-index,]
+
+# x_test = test[,-4]
+y_test = test$blueWins
+
+glm_model = glm(blueWins~.,train,family = 'binomial')
+summary(glm_model)
+
+glm_pred = predict(glm_model,test,type='response')
+classification = ifelse(glm_pred > 0.5,1,0)
+
+# 誤差指標:混淆矩陣
+conf = confusionMatrix(factor(y_test), factor(classification))
+conf
+```
+
+
+randomForest
+```{r}
+library(randomForest)
+
+rf_model = randomForest(blueWins~.,train)
+rf_pred = predict(rf_model,test,type = 'response')
+classification = ifelse(rf_pred > 0.5,1,0)
+#classification
+
+conf = confusionMatrix(factor(y_test), factor(classification))
+conf    
+
+# competition.csv是手動紀錄鑽石和大師牌位的4場比賽的資料
+# 作為額外實際的資料的驗證
+cp = read.csv('./competition.csv')
+cp_pred = predict(rf_model,cp,type = 'response')
+classification = ifelse(cp_pred > 0.5,1,0)
+print(confusionMatrix(factor(cp$blueWins), factor(classification)))
+
+
+```
+
+隨機森林的變數impoirtance
+```{r}
+importance(rf_model)
+data.frame(importance(rf_model)) %>% arrange(desc(IncNodePurity))
+varImpPlot(rf_model, sort = TRUE)
+```
+
+knn
+```{r}
+library(class)
+knn_model = knn(train, test, cl = train$blueWins, k = sqrt(length(train))+1)
+conf = confusionMatrix(factor(y_test), factor(knn_model))
+conf
+
+```
+```{r}
+# 常態分佈檢定:通過
+shapiro.test(combined$blueTotalMinionsKilled[0:1000])
+shapiro.test(combined$blueTotalJungleMinionsKilled[0:1000])
+shapiro.test(combined$blueWardsDestroyed[1000:3000])
+
+# 變異數檢定:通過
+library(car)
+bartlett.test(blueTotalMinionsKilled ~ blueWins, combined)
+bartlett.test(blueTotalJungleMinionsKilled ~ blueWins, combined)
+bartlett.test(blueTotalMinionsKilled ~ blueWins, combined)
+
+# H0:勝負和cs數量"沒有顯著差異"。
+# H1:勝負和cs數量"有顯著差異"。
+# one-way ANOVA
+# p-value <0.05，所以拒絕虛無假設，對立假設成立：勝負和cs數量"有顯著差異"
+cs_anova = aov(blueWins~blueTotalMinionsKilled,combined)
+summary(cs_anova)
+
+# H0:勝負和打野發育"沒有顯著差異"。
+# H1:勝負和打野發育"有顯著差異"。
+# one-way ANOVA
+# p-value <0.05，所以拒絕虛無假設，對立假設成立：勝負和打野發育"有顯著差異"
+cs_jungle = aov(blueWins~blueTotalJungleMinionsKilled ,combined)
+summary(cs_jungle)
+
+# 相關性:視野分數和隊伍死亡次數有無相關
+# 結果為負相關，代表視野越好越不容易被敵方抓到空檔擊殺
+cor.test(combined$blueDeaths,combined$blueWardsPlaced)
+cor(combined$blueWardsPlaced,combined$blueDeaths)
+
+```
+
+
+
+
+
+
+

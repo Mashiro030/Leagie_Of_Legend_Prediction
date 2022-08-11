@@ -1,0 +1,119 @@
+---
+title: "資料分佈"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r pressure, echo=FALSE}
+library(data.table)
+library(dplyr)
+library(ggplot2)
+require(DMwR2)
+library(tidyr)
+library(ggfortify)
+library(car)
+
+lol = fread('./dataset/high_diamond_ranked_10min.csv') 
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+summary(lol)
+
+hist_plot <- ggplot(lol, aes(x = lol$blueKills)) +labs(y = "場數",title = "藍隊擊殺平均")+geom_histogram(fill="#000be6",bins = 23) 
+hist_plot
+hist_plot_1 <- ggplot(lol, aes(x = lol$redKills)) +labs(y = "場數",title = "紅隊擊殺平均")+geom_histogram(fill="#e60000",bins = 23) 
+hist_plot_1
+#擊殺數分佈
+```
+
+```{r}
+#對局分析
+#優勢對局：擊殺數>助攻且擊殺數超過死亡數5次
+#劣勢對局：死亡數超過擊殺數五次
+#普通對局：不屬於上述對局的
+
+
+
+Advantage_blue <- lol[lol$blueKills > lol$blueAssists & lol$blueKills > lol$blueDeaths + 5,]
+Advantage <- length(Advantage_blue$gameId)#優勢對局
+
+Disadvantage_blue <- lol[lol$blueKills + 5 < lol$blueDeaths,]
+Disadvantage <- length(Disadvantage_blue$gameId)#劣勢對局
+
+Totalgames <- length(lol$gameId)
+
+Normal <- Totalgames - Advantage - Disadvantage#普通對局
+
+Gamequality <- data.frame(A = c("優勢對局","劣勢對局","普通對局"),B = c(Advantage,Disadvantage,Normal))
+Gamequality
+
+p3 <- ggplot(Gamequality,aes(x = A,y = B)) +
+  geom_bar(stat = "identity",fill = c("#E63F00","#EE7700","#DDAA00")) +
+  geom_label(aes(label = B)) +
+  labs(x="對局類",y = "場數",title = "鑽石場優劣對局分析") +
+  coord_flip() +
+  theme_classic()
+p3
+
+sum(Advantage+Normal+Disadvantage)#總場次
+
+
+```
+
+
+```{r}
+#地圖不對稱，紅隊殺菁英野怪和龍較多，藍隊殺諭示者較多
+Neutral <-data.frame(
+  type = c("blueteam", "redteam"),EliteMonsters=c(mean(lol$blueEliteMonsters, na.rm = T),mean(lol$redEliteMonsters, na.rm = T)),
+                  Dragons=c(mean(lol$blueDragons, na.rm = T),mean(lol$redDragons, na.rm = T)),
+                  Heralds=c(mean(lol$blueHeralds, na.rm = T),mean(lol$redHeralds, na.rm = T)))
+
+
+p_1 <- ggplot(data = Neutral, aes(x = type, y =EliteMonsters , fill = type,width = 0.3)) +
+  geom_bar(stat = "identity")+
+  scale_fill_manual(values = c("blueteam" = "#000be6",
+                               "redteam" = "#e60000"))
+p_1
+
+p_2 <- ggplot(data = Neutral, aes(x = type, y =Dragons , fill = type,width = 0.3)) +
+  geom_bar(stat = "identity")+
+  scale_fill_manual(values = c("blueteam" = "#000be6",
+                               "redteam" = "#e60000"))
+p_2
+
+p_3 <- ggplot(data = Neutral, aes(x = type, y =Heralds , fill = type,width = 0.3)) +
+  geom_bar(stat = "identity")+
+  scale_fill_manual(values = c("blueteam" = "#000be6",
+                               "redteam" = "#e60000"))
+p_3
+
+
+
+```
+
+```{r}
+#統計雙方取得的防禦塔數量，因為藍隊殺諭示者較多，所以取得防禦塔數量較多
+Tower <-data.frame(
+  type = c("blueteam", "redteam"),Tower=c(mean(lol$blueTowersDestroyed, na.rm = T),mean(lol$redTowersDestroyed, na.rm = T)))
+
+p <- ggplot(data = Tower, aes(x = type, y = Tower, fill = type,width = 0.3)) + 
+  geom_bar(stat = "identity",fill = c("blueteam" = "#000be6",
+                               "redteam" = "#e60000"))
+p
+```
+
+```{r}
+
+```
+
+
+
+
+

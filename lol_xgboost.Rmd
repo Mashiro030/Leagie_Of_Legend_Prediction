@@ -1,0 +1,173 @@
+---
+title: "Xgboost"
+output:
+  html_document:
+    df_print: paged
+---
+```{r}
+library(dplyr)
+library(data.table)
+library(Metrics)
+library(e1071)
+library(xgboost)
+library(fastDummies)
+library(vtreat)
+library(magrittr)
+library(rminer)
+```
+
+讀取資料
+```{r}
+data = read.csv('./dataset/combined.csv')
+data <- data[,-1]
+str(data)
+
+```
+
+設定目標欄位為factor型態
+```{r}
+data$blueWins <- as.factor(data$blueWins)
+data$blueKills <- as.factor(data$blueKills)
+```
+
+切割資料為train跟test
+```{r}
+set.seed(666)
+ind <- sample(2 ,nrow(data), replace = T ,prob=c(0.8,0.2))
+train = data[ind==1,]
+test = data[ind==2,]
+train %>% group_by(train$state) %>% count()
+test %>% group_by(test$state) %>% count()
+```
+
+輸入記錄的比賽資料
+```{r}
+competition <- test[1,]
+competition<-rbind(competition,
+                  c(-213, -19, -1, -7, 7, -14, 0, -1, 1, -1, 0, -1, 41, 0, -3800, -610),
+                  c(172, 15, 1, -3, 3, -2, 0, 1, -1, 0, 0, -16, 16, 1, -2200, -300),
+                  c(156, 22, 1, -4, 3, -3, 0, -1, 0, 0, -0.2, 6, 7, 1, -800, -1180),
+                  c(-182, -16, 1, 3, -3, -2, -1, -1, 0, 0, 0.2, 8, -5, 0, 1400, 850)
+      )
+competition <- competition[-1,]
+write.csv(competition, file="./dataset//competition.csv",row.names = FALSE)
+```
+
+執行svm
+```{r}
+svm_model = svm(formula = blueWins ~ .,data = train)
+summary(svm_model)
+```
+
+預測
+```{r}
+train.pred = predict(svm_model, train)
+test.pred = predict(svm_model, test)
+competition.pred = predict(svm_model, competition)
+```
+
+混淆矩陣：
+    train：0.7316794
+    test：0.7216444
+    competition：0.75
+```{r}
+train_cf = table(real=train$blueWins, predict=train.pred)
+sum(diag(train_cf))/sum(train_cf)
+
+test_cf = table(real=test$blueWins, predict=test.pred)
+sum(diag(test_cf))/sum(test_cf)
+
+competition_cf = table(real=competition$blueWins, predict=competition.pred)
+sum(diag(competition_cf))/sum(competition_cf)
+```
+XGBOOST：
+train跟test轉為dummy_matrix
+```{r}
+trainy <- train$blueWins %>% as.numeric()-1
+testy <- test$blueWins %>% as.numeric()-1
+train_dummy <- dummy_cols(train[,-14],remove_first_dummy = T,remove_selected_columns=T) %>% as.matrix()
+test_dummy <- dummy_cols(test[-14],remove_first_dummy = T,remove_selected_columns=T) %>% as.matrix()
+train_Matrix <- xgb.DMatrix(data=train_dummy,label=trainy,missing = 0)
+test_Matrix <- xgb.DMatrix(data=test_dummy,label=testy,missing = 0)
+```
+
+記錄的比賽資料轉為dummy_matrix
+```{r}
+competitiony <- competition$blueWins %>% as.numeric()-1
+competition_dummy <- dummy_cols(competition[,-14],remove_first_dummy = T,remove_selected_columns=T) %>% as.matrix()
+competition_Matrix <- xgb.DMatrix(data=competition_dummy,label=competitiony,missing = 0)
+```
+
+進行XGBOOST調參
+```{r}
+xgboost_set <- expand.grid(max_depth =c(5, 20),
+                           eta =c(0.3, 0.8, 1),
+                           subsample = c(.6, .8, 1), 
+                           colsample_bytree = c(.8, 1),
+                           min_child_weight =c(1, 3, 5))
+for(i in 1:nrow(xgboost_set)){
+  params <- list(
+    max_depth =xgboost_set$max_depth[i],
+    eta =xgboost_set$eta[i],
+    subsample =xgboost_set$subsample[i],
+    colsample_bytree =xgboost_set$colsample_bytree[i],
+    min_child_weight =xgboost_set$min_child_weight[i])
+  
+  bstDMatrix <- xgb.cv( 
+                        data = train_Matrix, 
+                        params = params,
+                        nfold = 5,
+                        nrounds = 500,
+                        objective = "multi:softmax",
+                        eval_metric ="mlogloss",
+                        "num_class" = 2)
+  
+  xgboost_set$nrounds[i] <- which.min(bstDMatrix$evaluation_log$test_mlogloss_mean)
+  xgboost_set$mlogloss[i] <- min(bstDMatrix$evaluation_log$test_mlogloss_mean)
+}
+xgboost_set %>% arrange(mlogloss) %>% head(10)
+
+```
+
+找到最優參數，定義為：
+                nrounds = 29,
+                eta=0.3,
+                min_child_weight=5,
+                max_depth=10,subsample=0.8,
+                colsample_bytree=0.8
+```{r}
+model <- xgboost(data = train_Matrix,
+                  nrounds = 29,
+                  eta=0.3,
+                  min_child_weight=5,
+                  max_depth=10,
+                  subsample=0.8,
+                  colsample_bytree=0.8,
+                  objective = "multi:softmax",
+                  eval_metric = "mlogloss",
+                  "num_class" = 2) 
+```
+
+混淆矩陣：
+  train：0.9405852
+  test：0.6988608
+  competition：0.75
+```{r}
+train_predict = predict(model, newdata = train_Matrix)
+train_cf =table(real=trainy ,predict=train_predict)
+sum(diag(train_cf))/sum(train_cf)
+
+test_predict = predict(model, newdata = test_Matrix)
+test_cf=table(real=testy ,predict=test_predict)
+sum(diag(test_cf))/sum(test_cf)
+
+predict = predict(model, newdata = competition_Matrix)
+confuse.Matrix=table(real=competitiony ,predict=predict)
+sum(diag(confuse.Matrix))/sum(confuse.Matrix)
+```
+查看XGBOOST的importance欄位
+```{r}
+importance <- xgb.importance(feature_names = NULL, model = model)
+head(importance)
+```
+
