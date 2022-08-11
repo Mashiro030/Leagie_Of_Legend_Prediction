@@ -27,5 +27,5 @@ Herald: Elite monster which gives stats bonus when killed by the player. It help
 Towers: Structures you have to destroy to reach the enemy Nexus. They give gold.<br>
 Level: Champion level. Start at 1. Max is 18.<br>
 
-source:https://www.kaggle.com/datasets/bobbyscience/league-of-legends-diamond-ranked-games-10-min<>
+source:https://www.kaggle.com/datasets/bobbyscience/league-of-legends-diamond-ranked-games-10-min<br>
 結果分別參照html檔
